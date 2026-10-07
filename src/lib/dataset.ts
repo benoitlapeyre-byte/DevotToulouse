@@ -23,10 +23,10 @@ export function capOne(raw: Raw[]): Raw[] {
 const initial: State = { raw: capOne(baseRaw as Raw[]), dates: baseDates as Dates, source: "Agence Toulouse (05/10/2026, année 2026 complète)" };
 let state: State = initial;
 const listeners = new Set<() => void>();
-// Équipe de management Delivery : collaborateurs sous Rodolphe Levesque + Alexis Balazuc (si présent).
+// Équipe de management Delivery : collaborateurs sous Rodolphe Levesque + Alexis Balazuc + Matthieu Maugard
 const low = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 export const isDeliveryMgmt = (talent: string, mgr: string) =>
-  low(mgr).includes("rodolphe levesque") || low(talent).includes("rodolphe levesque") || /alexis bal(d)?azuc/.test(low(talent));
+  low(mgr).includes("rodolphe levesque") || low(talent).includes("rodolphe levesque") || /alexis bal(d)?azuc/.test(low(talent)) || low(talent).includes("matthieu maugard") || low(mgr).includes("matthieu maugard");
 let includeDelivery = true;
 const filterView = (s: State): State => includeDelivery ? s : { ...s, raw: s.raw.filter((r) => !isDeliveryMgmt(r[1], r[2])) };
 let view: State = initial;
@@ -35,6 +35,9 @@ const sub = (l: () => void) => { listeners.add(l); return () => { listeners.dele
 
 export function useDataset() {
   return useSyncExternalStore(sub, () => view, () => initial);
+}
+export function useRawDataset() {
+  return useSyncExternalStore(sub, () => state, () => initial);
 }
 export function useIncludeDelivery() {
   return useSyncExternalStore(sub, () => includeDelivery, () => true);

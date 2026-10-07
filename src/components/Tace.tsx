@@ -76,13 +76,13 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
   });
   const cur = agg(base.filter((c) => c.month === month));
   const wd = workdays(month);
-  const own = cur.g - cur.ab - cur.mg - cur.tr; // FTE OWN = capacité brute − absence (maladie) − management − formation
+  const own = cur.g - cur.ab; // FTE OWN = capacité brute − absence FTE
   const level: "ws" | "mgr" | "talent" = mgr ? "talent" : ws ? "mgr" : "ws";
   const key = (c: C) => (level === "talent" ? c.talent : level === "mgr" ? c.mgr : c.ws.replace("FR - ", ""));
   const groups = new Map<string, C[]>();
   base.filter((c) => c.month === month).forEach((c) => groups.set(key(c), [...(groups.get(key(c)) ?? []), c]));
   const detailRows = [...groups.entries()]
-    .map(([name, l]) => { const { a, g, ab, lv, mg, tr } = agg(l); const net = g - lv; const own = g - ab - mg - tr; return { name, a, g, net, ab, lv, mg, tr, own, prod: own * wd, t: pct(a, net) }; })
+    .map(([name, l]) => { const { a, g, ab, lv, mg, tr } = agg(l); const net = g - lv; const own = g - ab; return { name, a, g, net, ab, lv, mg, tr, own, prod: own * wd, t: pct(a, net) }; })
     .filter((r) => r.g > 0)
     .sort((x, y) => x.t - y.t);
 
@@ -92,11 +92,11 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">TACE — Taux d'occupation</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{wd} jours ouvrés en {MONTH_FR[month]} · TACE = Assigned FTE / Net Capacity FTE · Net Capacity = capacité brute − congés · Capacité FTE OWN = capacité brute − maladie − management − formations · objectif {fmt(TARGET)}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{wd} jours ouvrés en {MONTH_FR[month]} · TACE = Assigned FTE / Net Capacity FTE · Net Capacity = capacité brute − congés · Capacité FTE OWN = capacité brute − Absence FTE · objectif {fmt(TARGET)}</p>
         </div>
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-10">
-        {[["Capacité brute FTE", cur.g.toFixed(1), cur.g * wd, "", ""], ["Capacité FTE OWN", own.toFixed(1), own * wd, "", "Capacité brute FTE − maladie − management − formations"], ["Congés FTE", cur.lv.toFixed(1), cur.lv * wd, "text-chart-1", ""], ["Net Capacity FTE", (cur.g - cur.lv).toFixed(1), (cur.g - cur.lv) * wd, "", ""], ["Absence FTE (maladie)", cur.ab.toFixed(1), cur.ab * wd, "text-chart-5", ""], ["FTE inoccupés", Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr).toFixed(1), Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr) * wd, "text-destructive", ""], ["Management FTE", cur.mg.toFixed(1), cur.mg * wd, "text-chart-3", ""], ["Formation FTE", cur.tr.toFixed(1), cur.tr * wd, "text-violet", ""], ["Assigned FTE", cur.a.toFixed(1), cur.a * wd, "", ""], ["TACE " + MONTH_FR[month], fmt(pct(cur.a, cur.g - cur.lv)), null, tone(pct(cur.a, cur.g - cur.lv)), ""]].map(([l, v, d, c, note]) => (
+        {[["Capacité brute FTE", cur.g.toFixed(1), cur.g * wd, "", ""], ["Capacité FTE OWN", own.toFixed(1), own * wd, "", "Capacité brute FTE − Absence FTE"], ["Congés FTE", cur.lv.toFixed(1), cur.lv * wd, "text-chart-1", ""], ["Net Capacity FTE", (cur.g - cur.lv).toFixed(1), (cur.g - cur.lv) * wd, "", ""], ["Absence FTE", cur.ab.toFixed(1), cur.ab * wd, "text-chart-5", ""], ["FTE inoccupés", Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr).toFixed(1), Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr) * wd, "text-destructive", ""], ["Management FTE", cur.mg.toFixed(1), cur.mg * wd, "text-chart-3", ""], ["Formation FTE", cur.tr.toFixed(1), cur.tr * wd, "text-violet", ""], ["Assigned FTE", cur.a.toFixed(1), cur.a * wd, "", ""], ["TACE " + MONTH_FR[month], fmt(pct(cur.a, cur.g - cur.lv)), null, tone(pct(cur.a, cur.g - cur.lv)), ""]].map(([l, v, d, c, note]) => (
           <div key={l as string} className="rounded-md border bg-secondary/40 p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</p>
             <p className={`mt-1 font-display text-3xl font-bold ${c}`}>{v}</p>

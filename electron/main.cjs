@@ -26,49 +26,8 @@ app.on("second-instance", () => {
 // Chromium flags pour optimiser le démarrage et la réactivité
 app.commandLine.appendSwitch("disable-http-cache", "false");
 
-function getAvailablePort() {
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.listen(0, "127.0.0.1", () => {
-      const port = srv.address().port;
-      srv.close(() => resolve(port));
-    });
-    srv.on("error", reject);
-  });
-}
-
-function waitForServer(port, maxWaitMs = 5000) {
-  const startTime = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
-        res.resume();
-        resolve();
-      });
-      req.on("error", () => {
-        if (Date.now() - startTime > maxWaitMs) {
-          reject(new Error(`Le serveur local n'a pas répondu dans le délai imparti (${maxWaitMs}ms)`));
-        } else {
-          setTimeout(check, 25);
-        }
-      });
-      req.setTimeout(500, () => {
-        req.destroy();
-        setTimeout(check, 25);
-      });
-    };
-    check();
-  });
-}
-
 async function startServer() {
   if (serverStarted) return serverPort;
-
-  const port = await getAvailablePort();
-  process.env.PORT = String(port);
-  process.env.HOST = "127.0.0.1";
-  process.env.NITRO_PORT = String(port);
-  process.env.NITRO_HOST = "127.0.0.1";
 
   const serverPath = app.isPackaged
     ? path.join(process.resourcesPath, "app.asar.unpacked", ".output", "server", "index.mjs")
@@ -78,14 +37,50 @@ async function startServer() {
     throw new Error(`Fichier serveur introuvable : ${serverPath}`);
   }
 
-  // Chargement in-process via dynamic import ESM :
-  // Aucun processus enfant (spawn), aucun processus orphelin en tâche de fond,
-  // consommation mémoire minimale et fermeture instantanée.
-  const serverUrl = pathToFileURL(serverPath).href;
-  await import(serverUrl);
+  // Interception de net.Server pour capturer le port réel et éviter les conflits (EADDRINUSE)
+  let nitroPortResolved;
+  let nitroPortRejected;
+  const portPromise = new Promise((resolve, reject) => {
+    nitroPortResolved = resolve;
+    nitroPortRejected = reject;
+  });
 
-  // Attente active et ultra-rapide (25ms) que le port écoute
-  await waitForServer(port);
+  const originalListen = net.Server.prototype.listen;
+  net.Server.prototype.listen = function(...args) {
+    this.once("listening", () => {
+      const addr = this.address();
+      if (addr && addr.port) {
+        nitroPortResolved(addr.port);
+        net.Server.prototype.listen = originalListen; // Restauration
+      }
+    });
+    this.once("error", (err) => {
+      nitroPortRejected(err);
+      net.Server.prototype.listen = originalListen; // Restauration
+    });
+    return originalListen.apply(this, args);
+  };
+
+  // Demander au système d'allouer un port libre (port 0)
+  process.env.PORT = "0";
+  process.env.HOST = "127.0.0.1";
+  process.env.NITRO_PORT = "0";
+  process.env.NITRO_HOST = "127.0.0.1";
+
+  const serverUrl = pathToFileURL(serverPath).href;
+
+  try {
+    await import(serverUrl);
+  } catch (err) {
+    net.Server.prototype.listen = originalListen;
+    throw err;
+  }
+
+  // Attendre la confirmation du port de façon fiable (timeout 30s de sécurité)
+  const port = await Promise.race([
+    portPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout lors de l'écoute du serveur local.")), 30000))
+  ]);
 
   serverStarted = true;
   serverPort = port;
