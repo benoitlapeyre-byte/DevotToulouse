@@ -14,13 +14,16 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "dev:electron": "electron .",
-    "build:electron": "cross-env NITRO_PRESET=node-server npm run build && electron-builder"
+    "build:electron": "cross-env NITRO_PRESET=node-server npm run build && electron-builder",
+    "build:electron:mac": "cross-env NITRO_PRESET=node-server npm run build && electron-builder --mac",
+    "build:electron:win": "cross-env NITRO_PRESET=node-server npm run build && electron-builder --win",
+    "build:electron:linux": "cross-env NITRO_PRESET=node-server npm run build && electron-builder --linux"
   },
   "build": {
     "appId": "com.devoteam.dashboard",
     "productName": "Devoteam Dashboard",
     "directories": {
-      "output": "C:/temp/Devoteam-build"
+      "output": "dist"
     },
     "asarUnpack": [
       ".output/**/*"
