@@ -2,21 +2,21 @@ import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useDataset, capacity, type Raw, type Dates } from "@/lib/dataset";
 
-export type C = { ws: string; talent: string; mgr: string; month: string; assigned: number; gross: number; absence: number; leave: number; management: number; training: number; fileGross?: number };
+export type C = { ws: string; talent: string; mgr: string; month: string; assigned: number; gross: number; absence: number; leave: number; management: number; training: number; selected: number; fileGross?: number };
 // One entry per talent-month: assigned, absence (maladie), leave (congés), management and
 // training FTE are summed across rows, gross capacity is repeated on every row so it is
 // taken once (max). When the file has no capacity column (gross = 0), it is derived from
 // entry/exit dates.
 export function buildCap(raw: Raw[], dates: Dates): C[] {
 const capMap = new Map<string, C>();
-raw.forEach(([ws, talent, mgr, month, , , , assigned, gross, absence, management, training, leave]) => {
-  if (ws === "FR - Innovative Tech (DAP)") return;
-  const k = talent + "|" + month;
-  const [entry = null, exit = null] = dates[talent] ?? [];
-  const c = capMap.get(k);
-  if (c) { c.assigned += assigned; c.fileGross = Math.max(c.fileGross ?? 0, gross); c.absence += absence; c.leave += leave; c.management += management; c.training += training; }
-  else capMap.set(k, { ws, talent, mgr, month, assigned, gross: 0, fileGross: gross, absence, leave, management, training });
-});
+  raw.forEach(([ws, talent, mgr, month, , , , assigned, gross, absence, management, training, leave, selected]) => {
+    if (ws === "FR - Innovative Tech (DAP)") return;
+    const k = talent + "|" + month;
+    const [entry = null, exit = null] = dates[talent] ?? [];
+    const c = capMap.get(k);
+    if (c) { c.assigned += assigned; c.fileGross = Math.max(c.fileGross ?? 0, gross); c.absence += absence; c.leave += leave; c.management += management; c.training += training; c.selected += (selected || 0); }
+    else capMap.set(k, { ws, talent, mgr, month, assigned, gross: 0, fileGross: gross, absence, leave, management, training, selected: selected || 0 });
+  });
 // Gross capacity is already normalized during import: it comes directly from the export,
 // or is derived there when the column is absent. Keep zero values from the file unchanged.
 return [...capMap.values()].map((c) => {
@@ -68,11 +68,11 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
       return { key: m, name: MONTH_FR[m], present, entries: entries.sort(byDate), exits: exits.sort(byDate) };
     });
   }, [raw, dates, ws, mgr]);
-  const agg = (l: C[]) => ({ a: l.reduce((s, c) => s + c.assigned, 0), g: l.reduce((s, c) => s + c.gross, 0), ab: l.reduce((s, c) => s + c.absence, 0), lv: l.reduce((s, c) => s + c.leave, 0), mg: l.reduce((s, c) => s + c.management, 0), tr: l.reduce((s, c) => s + c.training, 0) });
+  const agg = (l: C[]) => ({ a: l.reduce((s, c) => s + c.assigned, 0), g: l.reduce((s, c) => s + c.gross, 0), ab: l.reduce((s, c) => s + c.absence, 0), lv: l.reduce((s, c) => s + c.leave, 0), mg: l.reduce((s, c) => s + c.management, 0), tr: l.reduce((s, c) => s + c.training, 0), sel: l.reduce((s, c) => s + c.selected, 0) });
 
   const trend = MONTHS.map((m) => {
-    const { a, g, ab, lv, mg, tr } = agg(base.filter((c) => c.month === m));
-    return { name: MONTH_FR[m], "Assigned FTE": +a.toFixed(1), Absence: +ab.toFixed(1), Congés: +lv.toFixed(1), Management: +mg.toFixed(1), Formation: +tr.toFixed(1), Inoccupé: +Math.max(0, g - a - ab - lv - mg - tr).toFixed(1), TACE: +(pct(a, g - lv) * 100).toFixed(1) };
+    const { a, g, ab, lv, mg, tr, sel } = agg(base.filter((c) => c.month === m));
+    return { name: MONTH_FR[m], "Assigned FTE": +a.toFixed(1), "Selected FTE": +sel.toFixed(1), Absence: +ab.toFixed(1), Congés: +lv.toFixed(1), Management: +mg.toFixed(1), Formation: +tr.toFixed(1), Inoccupé: +Math.max(0, g - a - ab - lv - mg - tr).toFixed(1), TACE: +(pct(a, g - lv) * 100).toFixed(1) };
   });
   const cur = agg(base.filter((c) => c.month === month));
   const wd = workdays(month);
@@ -82,7 +82,7 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
   const groups = new Map<string, C[]>();
   base.filter((c) => c.month === month).forEach((c) => groups.set(key(c), [...(groups.get(key(c)) ?? []), c]));
   const detailRows = [...groups.entries()]
-    .map(([name, l]) => { const { a, g, ab, lv, mg, tr } = agg(l); const net = g - lv; const own = g - ab; return { name, a, g, net, ab, lv, mg, tr, own, prod: own * wd, t: pct(a, net) }; })
+    .map(([name, l]) => { const { a, g, ab, lv, mg, tr, sel } = agg(l); const net = g - lv; const own = g - ab; return { name, a, sel, g, net, ab, lv, mg, tr, own, prod: own * wd, t: pct(a, net) }; })
     .filter((r) => r.g > 0)
     .sort((x, y) => x.t - y.t);
 
@@ -96,7 +96,7 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
         </div>
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-10">
-        {[["Capacité brute FTE", cur.g.toFixed(1), cur.g * wd, "", ""], ["Capacité FTE OWN", own.toFixed(1), own * wd, "", "Capacité brute FTE − Absence FTE"], ["Congés FTE", cur.lv.toFixed(1), cur.lv * wd, "text-chart-1", ""], ["Net Capacity FTE", (cur.g - cur.lv).toFixed(1), (cur.g - cur.lv) * wd, "", ""], ["Absence FTE", cur.ab.toFixed(1), cur.ab * wd, "text-chart-5", ""], ["FTE inoccupés", Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr).toFixed(1), Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr) * wd, "text-destructive", ""], ["Management FTE", cur.mg.toFixed(1), cur.mg * wd, "text-chart-3", ""], ["Formation FTE", cur.tr.toFixed(1), cur.tr * wd, "text-violet", ""], ["Assigned FTE", cur.a.toFixed(1), cur.a * wd, "", ""], ["TACE " + MONTH_FR[month], fmt(pct(cur.a, cur.g - cur.lv)), null, tone(pct(cur.a, cur.g - cur.lv)), ""]].map(([l, v, d, c, note]) => (
+        {[["Capacité brute FTE", cur.g.toFixed(1), cur.g * wd, "", ""], ["Capacité FTE OWN", own.toFixed(1), own * wd, "", "Capacité brute FTE − Absence FTE"], ["Congés FTE", cur.lv.toFixed(1), cur.lv * wd, "text-chart-1", ""], ["Net Capacity FTE", (cur.g - cur.lv).toFixed(1), (cur.g - cur.lv) * wd, "", ""], ["Absence FTE", cur.ab.toFixed(1), cur.ab * wd, "text-chart-5", ""], ["FTE inoccupés", Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr).toFixed(1), Math.max(0, cur.g - cur.a - cur.ab - cur.lv - cur.mg - cur.tr) * wd, "text-destructive", ""], ["Management FTE", cur.mg.toFixed(1), cur.mg * wd, "text-chart-3", ""], ["Formation FTE", cur.tr.toFixed(1), cur.tr * wd, "text-violet", ""], ["Assigned FTE", cur.a.toFixed(1), cur.a * wd, "", ""], ["Selected FTE", cur.sel.toFixed(1), cur.sel * wd, "text-blue-500", ""], ["TACE " + MONTH_FR[month], fmt(pct(cur.a, cur.g - cur.lv)), null, tone(pct(cur.a, cur.g - cur.lv)), ""]].map(([l, v, d, c, note]) => (
           <div key={l as string} className="rounded-md border bg-secondary/40 p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{l}</p>
             <p className={`mt-1 font-display text-3xl font-bold ${c}`}>{v}</p>
@@ -148,13 +148,14 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-secondary text-left text-xs uppercase tracking-wider text-muted-foreground">
 
-              <tr><th className="py-2 pl-4">{level === "talent" ? "Collaborateur" : level === "mgr" ? "Manager" : "Workspace"}</th><th className="text-right">Assigned FTE</th><th className="text-right">Absence</th><th className="text-right">Congés</th><th className="text-right">Management</th><th className="text-right">Formation</th><th className="text-right">Capacité</th><th className="text-right">Net Capacity</th><th className="text-right">Capacité FTE OWN</th><th className="text-right">Prod. possible (j)</th><th className="w-1/3 pl-4 pr-4">TACE</th></tr>
+              <tr><th className="py-2 pl-4">{level === "talent" ? "Collaborateur" : level === "mgr" ? "Manager" : "Workspace"}</th><th className="text-right">Assigned FTE</th><th className="text-right">Selected FTE</th><th className="text-right">Absence</th><th className="text-right">Congés</th><th className="text-right">Management</th><th className="text-right">Formation</th><th className="text-right">Capacité</th><th className="text-right">Net Capacity</th><th className="text-right">Capacité FTE OWN</th><th className="text-right">Prod. possible (j)</th><th className="w-1/3 pl-4 pr-4">TACE</th></tr>
             </thead>
             <tbody>
               {detailRows.map((r) => (
                 <tr key={r.name} className="border-t">
                   <td className="py-2 pl-4">{r.name}</td>
                   <td className="text-right font-mono">{r.a.toFixed(1)}</td>
+                  <td className="text-right font-mono text-blue-500">{r.sel > 0 ? r.sel.toFixed(1) : "—"}</td>
                   <td className="text-right font-mono text-chart-5">{r.ab > 0 ? r.ab.toFixed(1) : "—"}</td>
                   <td className="text-right font-mono text-chart-1">{r.lv > 0 ? r.lv.toFixed(1) : "—"}</td>
                   <td className="text-right font-mono text-chart-3">{r.mg > 0 ? r.mg.toFixed(1) : "—"}</td>
@@ -171,7 +172,7 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
                   </td>
                 </tr>
               ))}
-              {!detailRows.length && <tr><td colSpan={11} className="py-4 text-center text-muted-foreground">Pas de détail disponible</td></tr>}
+              {!detailRows.length && <tr><td colSpan={12} className="py-4 text-center text-muted-foreground">Pas de détail disponible</td></tr>}
             </tbody>
           </table>
       </div>

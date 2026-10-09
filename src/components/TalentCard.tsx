@@ -1,9 +1,9 @@
 import { useDataset, capacity, type Raw } from "@/lib/dataset";
 
-type R = { ws: string; talent: string; mgr: string; month: string; dossier: string; status: string; fte: number; gross: number; absence: number; leave: number; management: number; training: number };
+type R = { ws: string; talent: string; mgr: string; month: string; dossier: string; status: string; fte: number; gross: number; absence: number; leave: number; management: number; training: number; selected: number };
 const toAll = (raw: Raw[]): R[] => raw.map(
-  ([ws, talent, mgr, month, dossier, status, , fte, gross, absence, management, training, leave]) => ({
-    ws, talent, mgr, month, dossier, fte, gross: gross || 0, absence, leave, management, training,
+  ([ws, talent, mgr, month, dossier, status, , fte, gross, absence, management, training, leave, selected]) => ({
+    ws, talent, mgr, month, dossier, fte, gross: gross || 0, absence, leave, management, training, selected: selected || 0,
     status: month === "Sep" && status === "REQUEST" ? "IN_PROGRESS" : status,
   }),
 ).filter((r) => r.ws !== "FR - Innovative Tech (DAP)");
@@ -31,7 +31,7 @@ export function TalentCard({ talent, onClose }: { talent: string; onClose: () =>
     const fg = Math.max(0, ...l.map((r) => r.gross));
     const gross = fg;
     const st: keyof typeof STATUS = ld.some((r) => r.status === "IN_PROGRESS") ? "mission" : ld.length ? "lead" : fte > 0 ? "nolead" : gross === 0 ? "out" : "inter";
-    return { m, fte, gross, tace: gross ? fte / gross : null, absence: l.reduce((s, r) => s + r.absence, 0), leave: l.reduce((s, r) => s + r.leave, 0), management: l.reduce((s, r) => s + r.management, 0), training: l.reduce((s, r) => s + r.training, 0), st };
+    return { m, fte, gross, tace: gross ? fte / gross : null, absence: l.reduce((s, r) => s + r.absence, 0), leave: l.reduce((s, r) => s + r.leave, 0), management: l.reduce((s, r) => s + r.management, 0), training: l.reduce((s, r) => s + r.training, 0), selected: l.reduce((s, r) => s + r.selected, 0), st };
   });
   const totFte = months.reduce((s, x) => s + x.fte, 0);
   const totGross = months.reduce((s, x) => s + x.gross, 0);
@@ -71,13 +71,14 @@ export function TalentCard({ talent, onClose }: { talent: string; onClose: () =>
 
         <h3 className="mt-6 mb-2 text-xs uppercase tracking-wider text-muted-foreground">Mois par mois</h3>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs text-muted-foreground"><tr><th className="py-1">Mois</th><th>Statut</th><th className="text-right">Assigned FTE</th><th className="text-right">Capacité</th><th className="text-right">Absence</th><th className="text-right">Congés</th><th className="text-right">Management</th><th className="text-right">Formation</th><th className="text-right">TACE</th></tr></thead>
+          <thead className="text-left text-xs text-muted-foreground"><tr><th className="py-1">Mois</th><th>Statut</th><th className="text-right">Assigned FTE</th><th className="text-right">Selected FTE</th><th className="text-right">Capacité</th><th className="text-right">Absence</th><th className="text-right">Congés</th><th className="text-right">Management</th><th className="text-right">Formation</th><th className="text-right">TACE</th></tr></thead>
           <tbody>
             {months.map((x) => (
               <tr key={x.m} className="border-t">
                 <td className="py-2 font-mono">{FR[x.m]}</td>
                 <td><span className={`rounded px-2 py-0.5 text-xs ${STATUS[x.st][1]}`}>{STATUS[x.st][0]}</span></td>
                 <td className="text-right font-mono">{x.fte.toFixed(2)}</td>
+                <td className="text-right font-mono text-blue-500">{x.selected ? x.selected.toFixed(2) : "—"}</td>
                 <td className="text-right font-mono text-muted-foreground">{x.gross ? x.gross.toFixed(2) : "—"}</td>
                 <td className="text-right font-mono text-chart-2">{x.absence ? x.absence.toFixed(2) : "—"}</td>
                 <td className="text-right font-mono text-chart-1">{x.leave ? x.leave.toFixed(2) : "—"}</td>

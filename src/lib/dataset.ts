@@ -2,8 +2,8 @@ import { useSyncExternalStore } from "react";
 import baseRaw from "@/data/agence.json";
 import baseDates from "@/data/dates.json";
 
-// [ws, talent, mgr, month, dossier, status, rev, assignedFte, grossCapacity, absence, management, training, leave]
-export type Raw = [string, string, string, string, string, string, number, number, number, number, number, number, number];
+// [ws, talent, mgr, month, dossier, status, rev, assignedFte, grossCapacity, absence, management, training, leave, selectedFte]
+export type Raw = [string, string, string, string, string, string, number, number, number, number, number, number, number, number];
 export type Dates = Record<string, (string | null)[]>;
 type State = { raw: Raw[]; dates: Dates; source: string };
 
@@ -127,6 +127,7 @@ export async function importSpreadsheet(file: File): Promise<State> {
     dossier: col("dossiername"), status: col("taskstatus"), rev: col("recognitionrevenue"), fte: col("assignedfte"),
     gross: col("grosscapacityfte", "grosscapacity", "capacitébrutefte", "capacitébrute"), absence: col("absencefte"), leave: col("leavefte", "leave"), mgmt: col("busymanagementfte", "managementfte"), training: col("trainingfte", "formation"),
     entry: col("entrydate", "datedentrée", "entrée", "entry"), exit: col("exitdate", "datedesortie", "sortie", "exit"),
+    selected: col("selectedfte", "selected"),
   };
   const missing = (["ws", "talent", "mgr", "month", "fte"] as const).filter((k) => c[k] < 0);
   if (missing.length) throw new Error(`Colonnes manquantes : ${missing.join(", ")}.`);
@@ -140,10 +141,10 @@ export async function importSpreadsheet(file: File): Promise<State> {
   const raw: Raw[] = body.map((r) => {
     const talent = String(r[c.talent]).trim();
     const month = toMonth(r[c.month]);
-    const fte = num(r[c.fte]), absence = num(get(r, c.absence)), leave = num(get(r, c.leave)), management = num(get(r, c.mgmt)), training = num(get(r, c.training));
+    const fte = num(r[c.fte]), absence = num(get(r, c.absence)), leave = num(get(r, c.leave)), management = num(get(r, c.mgmt)), training = num(get(r, c.training)), selected = num(get(r, c.selected));
     const [entry = null, exit = null] = dates[talent] ?? [];
     const gross = c.gross >= 0 ? num(r[c.gross]) : dates[talent] ? capacity(month, entry, exit) : fte + absence + leave + management + training;
-    return [String(r[c.ws]).trim(), talent, String(r[c.mgr]).trim(), month, String(get(r, c.dossier) || "-").trim(), String(get(r, c.status) || "-").trim(), num(get(r, c.rev)), fte, gross, absence, management, training, leave];
+    return [String(r[c.ws]).trim(), talent, String(r[c.mgr]).trim(), month, String(get(r, c.dossier) || "-").trim(), String(get(r, c.status) || "-").trim(), num(get(r, c.rev)), fte, gross, absence, management, training, leave, selected];
   });
   if (!raw.length) throw new Error("Aucune ligne de données trouvée.");
   return { raw, dates, source: file.name };
@@ -151,10 +152,10 @@ export async function importSpreadsheet(file: File): Promise<State> {
 
 export async function exportSpreadsheet() {
   const XLSX = await import("xlsx");
-  const header = ["Talent Workspace", "Talent Talent", "Talent Manager", "Occupation Time Month", "Dossier Name", "Task Status", "Assigned FTE", "Gross capacity FTE", "Absence FTE", "Leave FTE", "[Busy] Management FTE", "Training FTE", "Entry date", "Exit date"];
-  const data = state.raw.map(([ws, talent, mgr, month, dossier, status, , fte, gross, absence, management, training, leave]) => {
+  const header = ["Talent Workspace", "Talent Talent", "Talent Manager", "Occupation Time Month", "Dossier Name", "Task Status", "Assigned FTE", "Gross capacity FTE", "Absence FTE", "Leave FTE", "[Busy] Management FTE", "Training FTE", "Selected FTE", "Entry date", "Exit date"];
+  const data = state.raw.map(([ws, talent, mgr, month, dossier, status, , fte, gross, absence, management, training, leave, selected]) => {
     const [entry, exit] = state.dates[talent] ?? [null, null];
-    return [ws, talent, mgr, month, dossier, status, fte, gross, absence, leave, management, training, entry ?? "", exit ?? ""];
+    return [ws, talent, mgr, month, dossier, status, fte, gross, absence, leave, management, training, selected || 0, entry ?? "", exit ?? ""];
   });
   const sheet = XLSX.utils.aoa_to_sheet([header, ...data]);
   sheet["!cols"] = header.map((x, i) => ({ wch: i === 4 ? 60 : Math.max(14, x.length + 2) }));
