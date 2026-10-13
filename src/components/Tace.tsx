@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, ComposedChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { useDataset, capacity, type Raw, type Dates } from "@/lib/dataset";
+import { useDataset, capacity, type Raw, type Dates, isExcludedCollaborator } from "@/lib/dataset";
 
 export type C = { ws: string; talent: string; mgr: string; month: string; assigned: number; gross: number; absence: number; leave: number; management: number; training: number; selected: number; fileGross?: number };
 // One entry per talent-month: assigned, absence (maladie), leave (congés), management and
@@ -10,7 +10,7 @@ export type C = { ws: string; talent: string; mgr: string; month: string; assign
 export function buildCap(raw: Raw[], dates: Dates): C[] {
 const capMap = new Map<string, C>();
   raw.forEach(([ws, talent, mgr, month, , , , assigned, gross, absence, management, training, leave, selected]) => {
-    if (ws === "FR - Innovative Tech (DAP)") return;
+    if (ws === "FR - Innovative Tech (DAP)" || isExcludedCollaborator(talent, mgr)) return;
     const k = talent + "|" + month;
     const [entry = null, exit = null] = dates[talent] ?? [];
     const c = capMap.get(k);
@@ -48,7 +48,7 @@ export function Tace({ ws, mgr, month, onPick }: { ws: string; mgr: string; mont
 
   // Entries / exits per month, from entry/exit dates, scoped to the current ws/mgr filters.
   const moves = useMemo(() => {
-    const scope = new Set(raw.filter(([w, , m]) => w !== "FR - Innovative Tech (DAP)" && (!ws || w === ws) && (!mgr || m === mgr)).map(([, t]) => t));
+    const scope = new Set(raw.filter(([w, t, m]) => w !== "FR - Innovative Tech (DAP)" && !isExcludedCollaborator(t, m) && (!ws || w === ws) && (!mgr || m === mgr)).map(([, t]) => t));
     const hasRow = new Set(raw.map(([, t, , mo]) => t + "|" + mo));
     const inMonth = (iso: string | null, mi: number) => !!iso && iso.slice(0, 4) === "2026" && +iso.slice(5, 7) - 1 === mi;
     return MONTHS.map((m, i) => {

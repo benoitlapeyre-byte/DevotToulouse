@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useDataset, restoreDataset, capacity, type Raw } from "@/lib/dataset";
+import { useDataset, restoreDataset, capacity, type Raw, isExcludedCollaborator } from "@/lib/dataset";
 
 export type Row = {
   ws: string;
@@ -29,7 +29,7 @@ const toRows = (raw: Raw[]): Row[] => raw.map(
     // Règle métier : en septembre, tout lead identifié est considéré comme confirmé (IN_PROGRESS), jamais REQUEST.
     status: month === "Sep" && status === "REQUEST" ? "IN_PROGRESS" : status,
   }),
-).filter((r) => r.ws !== "FR - Innovative Tech (DAP)");
+).filter((r) => r.ws !== "FR - Innovative Tech (DAP)" && !isExcludedCollaborator(r.talent, r.mgr));
 
 export function useDashboard() {
   const [ws, setWs] = useState("");

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import base from "@/data/conges.json";
 import agence from "@/data/agence.json";
+import { isExcludedCollaborator } from "@/lib/dataset";
 
 const keyName = (s: string) => s.toLowerCase().replace(/[^a-zà-ÿ]/g, "");
 const mgrMap = new Map<string, string>();
@@ -43,6 +44,7 @@ export async function importLeaves(file: File): Promise<LeaveState> {
   for (const r of rows.slice(hi + 1)) {
     const name = String(r[c.w] ?? "").trim(); const plan = String(r[c.plan] ?? "").trim();
     if (!name || !plan) continue;
+    if (isExcludedCollaborator(name, managerOf(name))) continue;
     const o = map.get(name) ?? { name, unit: String(r[c.unit] ?? ""), dept: String(r[c.dept] ?? ""), n: 0, nAcq: 0, n1: 0, risk: 0, exp: null };
     if (/N-1$/.test(plan)) { o.n1 = num(r[c.cur]); o.risk = c.risk >= 0 ? num(r[c.risk]) : 0; o.exp = c.exp >= 0 ? iso(r[c.exp]) : null; }
     else if (/ N$/.test(plan)) { o.n = num(r[c.cur]); o.nAcq = c.acc >= 0 ? num(r[c.acc]) : 0; }

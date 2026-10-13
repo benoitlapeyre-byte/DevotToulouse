@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useDataset, capacity, type Raw } from "@/lib/dataset";
+import { useDataset, capacity, type Raw, isExcludedCollaborator } from "@/lib/dataset";
 
 type Row = { ws: string; talent: string; mgr: string; month: string; dossier: string; status: string; fte: number; gross: number; absence: number; leave: number; management: number; training: number };
 const toRows = (raw: Raw[]): Row[] => raw.map(
@@ -9,7 +9,7 @@ const toRows = (raw: Raw[]): Row[] => raw.map(
     status: month === "Sep" && status === "REQUEST" ? "IN_PROGRESS" : status,
     fte, gross, absence, leave, management, training,
   }),
-).filter((r) => r.ws !== "FR - Innovative Tech (DAP)");
+).filter((r) => r.ws !== "FR - Innovative Tech (DAP)" && !isExcludedCollaborator(r.talent, r.mgr));
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTH_FR: Record<string, string> = { Jan: "Janv", Feb: "Févr", Mar: "Mars", Apr: "Avr", May: "Mai", Jun: "Juin", Jul: "Juil", Aug: "Août", Sep: "Sept", Oct: "Oct", Nov: "Nov", Dec: "Déc" };
 

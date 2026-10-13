@@ -7,12 +7,24 @@ export type Raw = [string, string, string, string, string, string, number, numbe
 export type Dates = Record<string, (string | null)[]>;
 type State = { raw: Raw[]; dates: Dates; source: string };
 
-const KEY = "agence-dataset-v9";
+const KEY = "agence-dataset-v10";
+const low = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+// Exclusion métier : ne pas considérer les collaborateurs de Natacha Vannier et de Hobisoa Nalitiana
+export const isExcludedCollaborator = (talent: string, mgr: string) => {
+  const m = low(mgr);
+  if ((m.includes("natacha") && m.includes("vannier")) || m.includes("hobisoa") || m.includes("nalitiana")) return true;
+  const t = low(talent);
+  if (t === "eddy travers" || t === "liza amrouni") return true;
+  return false;
+};
+
 // Plafond métier : par collaborateur et par mois, Assigned FTE total et capacité brute ne dépassent jamais 1.
 export function capOne(raw: Raw[]): Raw[] {
+  const filtered = raw.filter((r) => !isExcludedCollaborator(r[1], r[2]));
   const tot = new Map<string, number>();
-  raw.forEach((r) => { const k = r[1] + "|" + r[3]; tot.set(k, (tot.get(k) ?? 0) + r[7]); });
-  return raw.map((r) => {
+  filtered.forEach((r) => { const k = r[1] + "|" + r[3]; tot.set(k, (tot.get(k) ?? 0) + r[7]); });
+  return filtered.map((r) => {
     const t = tot.get(r[1] + "|" + r[3]) ?? 0;
     const x = [...r] as Raw;
     if (t > 1) x[7] = +(r[7] / t).toFixed(4);
@@ -24,7 +36,6 @@ const initial: State = { raw: capOne(baseRaw as Raw[]), dates: baseDates as Date
 let state: State = initial;
 const listeners = new Set<() => void>();
 // Équipe de management Delivery : collaborateurs sous Rodolphe Levesque + Alexis Balazuc + Matthieu Maugard
-const low = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 export const isDeliveryMgmt = (talent: string, mgr: string) =>
   low(mgr).includes("rodolphe levesque") || low(talent).includes("rodolphe levesque") || /alexis bal(d)?azuc/.test(low(talent)) || low(talent).includes("matthieu maugard") || low(mgr).includes("matthieu maugard");
 let includeDelivery = true;
@@ -55,7 +66,8 @@ export function setDataset(next: State, persist = true) {
 }
 export function restoreDataset() {
   try { if (localStorage.getItem("agence-include-delivery") === "0") { includeDelivery = false; emit(); } } catch { /* ignore */ }
-  try { const s = localStorage.getItem(KEY); if (s) setDataset(JSON.parse(s), false); } catch { /* ignore */ }
+  try { localStorage.removeItem("agence-dataset-v9"); } catch { /* ignore */ }
+  try { const s = localStorage.getItem(KEY); if (s) setDataset(JSON.parse(s), false); else emit(); } catch { /* ignore */ }
 }
 export function resetDataset() {
   localStorage.removeItem(KEY);
@@ -133,7 +145,7 @@ export async function importSpreadsheet(file: File): Promise<State> {
   if (missing.length) throw new Error(`Colonnes manquantes : ${missing.join(", ")}.`);
 
   const dates: Dates = { ...state.dates };
-  const body = rows.slice(headerIdx + 1).filter((r) => r[c.talent]);
+  const body = rows.slice(headerIdx + 1).filter((r) => r[c.talent] && !isExcludedCollaborator(String(r[c.talent]), String(r[c.mgr])));
   if (c.entry >= 0 || c.exit >= 0) body.forEach((r) => {
     dates[String(r[c.talent])] = [c.entry >= 0 ? toIso(r[c.entry]) : null, c.exit >= 0 ? toIso(r[c.exit]) : null];
   });

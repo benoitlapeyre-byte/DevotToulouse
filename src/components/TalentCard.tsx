@@ -1,4 +1,4 @@
-import { useDataset, capacity, type Raw } from "@/lib/dataset";
+import { useDataset, capacity, type Raw, isExcludedCollaborator } from "@/lib/dataset";
 
 type R = { ws: string; talent: string; mgr: string; month: string; dossier: string; status: string; fte: number; gross: number; absence: number; leave: number; management: number; training: number; selected: number };
 const toAll = (raw: Raw[]): R[] => raw.map(
@@ -6,7 +6,7 @@ const toAll = (raw: Raw[]): R[] => raw.map(
     ws, talent, mgr, month, dossier, fte, gross: gross || 0, absence, leave, management, training, selected: selected || 0,
     status: month === "Sep" && status === "REQUEST" ? "IN_PROGRESS" : status,
   }),
-).filter((r) => r.ws !== "FR - Innovative Tech (DAP)");
+).filter((r) => r.ws !== "FR - Innovative Tech (DAP)" && !isExcludedCollaborator(r.talent, r.mgr));
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const FR: Record<string, string> = { Jan: "Janv", Feb: "Févr", Mar: "Mars", Apr: "Avr", May: "Mai", Jun: "Juin", Jul: "Juil", Aug: "Août", Sep: "Sept", Oct: "Oct", Nov: "Nov", Dec: "Déc" };
